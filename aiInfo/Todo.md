@@ -51,6 +51,12 @@
   - `parsePRUrl(url)` → 返回 `{ owner, repo, pullNumber }` 或抛出错误
   - 写单元测试验证正常链接和异常链接
 
+- [ ] **Supabase 初始化**
+  - 在 Supabase 控制台创建项目，新建 `pr_reviews` 表（见 Tech.md 5.1）
+  - 配置 RLS 策略（见 Tech.md 5.2）
+  - 安装 `@supabase/supabase-js`，创建 `src/lib/supabase.js` 客户端单例
+  - 将 `VITE_SUPABASE_URL` 和 `VITE_SUPABASE_ANON_KEY` 填入 `.env.local`
+
 - [ ] **验收**：在 Node.js 脚本中，传入真实 PR 链接，能打印出三个工具的返回数据
 
 ---
@@ -157,10 +163,11 @@
   - 实时校验 PR 链接格式
   - 分析中显示 loading 状态，禁止重复提交
 
-- [ ] **HistoryList 组件**（当前 Session 缓存）
-  - 侧边栏或首页下方展示历史分析的 PR 列表
-  - 使用 `sessionStorage` 或 React Context 存储
-  - 点击跳转对应报告页
+- [ ] **HistoryList 组件**（Supabase 持久化）
+  - 实现 `useHistory.js` Hook，封装 Supabase 读写
+  - 分析完成后将结果写入 `pr_reviews` 表
+  - 历史列表从 Supabase 查询（按 `session_id` + `created_at DESC`）
+  - 点击历史记录直接读取 `report` 字段展示，不重复调用 API
 
 ### Day 11 — 整体 UI 打磨
 
@@ -194,12 +201,17 @@
 ### Day 13 — 部署上线
 
 - [ ] **Vercel 部署配置**
-  - 在 Vercel 控制台配置环境变量（`ANTHROPIC_API_KEY`、`GITHUB_TOKEN`）
+  - 在 Vercel 控制台配置环境变量：`ANTHROPIC_API_KEY`、`ANTHROPIC_BASE_URL`、`GITHUB_TOKEN`、`VITE_SUPABASE_URL`、`VITE_SUPABASE_ANON_KEY`
   - 检查 `vercel.json` 路由配置（`/api/*` 路由到 Serverless Functions）
   - 首次部署，验证生产环境能正常运行
 
+- [ ] **Supabase 生产配置**
+  - 在 Supabase 控制台确认 `pr_reviews` 表和 RLS 策略已就绪
+  - 将生产环境的 `VITE_SUPABASE_URL` 和 `VITE_SUPABASE_ANON_KEY` 配置到 Vercel
+
 - [ ] **生产环境冒烟测试**
   - 输入 3 个真实 PR 链接测试完整流程
+  - 验证历史记录写入 Supabase 并正常读取
   - 测试错误场景（输入非法链接）
 
 ### Day 14 — 收尾
