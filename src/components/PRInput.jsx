@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { parsePRUrl } from '../lib/parsePRUrl.js';
 
 /**
@@ -8,6 +9,8 @@ import { parsePRUrl } from '../lib/parsePRUrl.js';
  *   isLoading — 是否正在分析中
  */
 export function PRInput({ onSubmit, isLoading }) {
+  const [errorMsg, setErrorMsg] = useState('');
+
   return (
     <form
       className="w-full"
@@ -16,11 +19,10 @@ export function PRInput({ onSubmit, isLoading }) {
         const value = e.target.prUrl.value.trim();
         try {
           const parsed = parsePRUrl(value);
+          setErrorMsg('');
           onSubmit(value, parsed);
         } catch {
-          // 触发浏览器默认 required 提示，或让错误高亮
-          e.target.prUrl.setCustomValidity('请输入有效的 GitHub PR 链接');
-          e.target.prUrl.reportValidity();
+          setErrorMsg('请输入有效的 GitHub PR 链接，例如 https://github.com/owner/repo/pull/123');
         }
       }}
     >
@@ -28,13 +30,20 @@ export function PRInput({ onSubmit, isLoading }) {
         <div className="relative">
           <input
             name="prUrl"
-            type="url"
+            type="text"
             required
             disabled={isLoading}
             placeholder="https://github.com/owner/repo/pull/123"
-            onChange={(e) => e.target.setCustomValidity('')}
-            className="w-full bg-zinc-900 border border-zinc-700 rounded-lg px-4 py-3 text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 disabled:opacity-50 font-mono"
+            onChange={() => setErrorMsg('')}
+            className={`w-full bg-zinc-900 border rounded-lg px-4 py-3 text-sm text-zinc-100 placeholder-zinc-500 focus:outline-none focus:ring-1 disabled:opacity-50 font-mono transition-colors ${
+              errorMsg
+                ? 'border-red-500 focus:border-red-500 focus:ring-red-500'
+                : 'border-zinc-700 focus:border-indigo-500 focus:ring-indigo-500'
+            }`}
           />
+          {errorMsg && (
+            <p className="mt-1.5 text-xs text-red-400 font-mono">{errorMsg}</p>
+          )}
         </div>
         <button
           type="submit"
