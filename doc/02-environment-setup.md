@@ -30,7 +30,7 @@
 **第一步：克隆代码**
 
 ```bash
-git clone <你的仓库地址>
+git clone https://github.com/nacheal/ai-pr-reviewer.git
 cd ai-pr-reviewer
 ```
 
