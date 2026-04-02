@@ -1,56 +1,65 @@
 /**
- * api/review.js — PR Pilot Agent SSE 端点
+ * api/review.js — PR Pilot Agent SSE 端点（DeepSeek 版）
  *
  * 本地开发：由 local/server.js 的 Express 调用此模块
  * 生产环境：作为 Vercel Serverless Function 运行
  */
 
-import Anthropic from '@anthropic-ai/sdk';
+import OpenAI from 'openai';
 import { getPrInfo, getPrFiles, getFileDiff } from './github.js';
 import { parsePRUrl } from './parsePRUrl.js';
 
 // ──────────────────────────────────────────
-// 工具定义（Tool Schemas）
+// 工具定义（OpenAI Function Calling 格式）
 // ──────────────────────────────────────────
 const TOOLS = [
   {
-    name: 'get_pr_info',
-    description: '获取 PR 的基本信息，包括标题、描述、作者、源分支和目标分支',
-    input_schema: {
-      type: 'object',
-      properties: {
-        owner: { type: 'string', description: '仓库所有者' },
-        repo: { type: 'string', description: '仓库名称' },
-        pull_number: { type: 'number', description: 'PR 编号' },
+    type: 'function',
+    function: {
+      name: 'get_pr_info',
+      description: '获取 PR 的基本信息，包括标题、描述、作者、源分支和目标分支',
+      parameters: {
+        type: 'object',
+        properties: {
+          owner: { type: 'string', description: '仓库所有者' },
+          repo: { type: 'string', description: '仓库名称' },
+          pull_number: { type: 'number', description: 'PR 编号' },
+        },
+        required: ['owner', 'repo', 'pull_number'],
       },
-      required: ['owner', 'repo', 'pull_number'],
     },
   },
   {
-    name: 'get_pr_files',
-    description: '获取 PR 变更的文件列表，包含每个文件的增删行数和状态',
-    input_schema: {
-      type: 'object',
-      properties: {
-        owner: { type: 'string' },
-        repo: { type: 'string' },
-        pull_number: { type: 'number' },
+    type: 'function',
+    function: {
+      name: 'get_pr_files',
+      description: '获取 PR 变更的文件列表，包含每个文件的增删行数和状态',
+      parameters: {
+        type: 'object',
+        properties: {
+          owner: { type: 'string' },
+          repo: { type: 'string' },
+          pull_number: { type: 'number' },
+        },
+        required: ['owner', 'repo', 'pull_number'],
       },
-      required: ['owner', 'repo', 'pull_number'],
     },
   },
   {
-    name: 'get_file_diff',
-    description: '获取指定文件的完整 diff 内容，用于深入分析代码变更',
-    input_schema: {
-      type: 'object',
-      properties: {
-        owner: { type: 'string' },
-        repo: { type: 'string' },
-        pull_number: { type: 'number' },
-        filename: { type: 'string', description: '文件路径，如 src/index.js' },
+    type: 'function',
+    function: {
+      name: 'get_file_diff',
+      description: '获取指定文件的完整 diff 内容，用于深入分析代码变更',
+      parameters: {
+        type: 'object',
+        properties: {
+          owner: { type: 'string' },
+          repo: { type: 'string' },
+          pull_number: { type: 'number' },
+          filename: { type: 'string', description: '文件路径，如 src/index.js' },
+        },
+        required: ['owner', 'repo', 'pull_number', 'filename'],
       },
-      required: ['owner', 'repo', 'pull_number', 'filename'],
     },
   },
 ];
@@ -110,12 +119,13 @@ async function executeTool(name, input) {
 // ReAct Agent 异步生成器
 // ──────────────────────────────────────────
 async function* runAgent(owner, repo, pullNumber) {
-  const client = new Anthropic({
-    apiKey: process.env.ANTHROPIC_API_KEY,
-    baseURL: process.env.ANTHROPIC_BASE_URL,
+  const client = new OpenAI({
+    apiKey: process.env.DEEPSEEK_TOKEN,
+    baseURL: 'https://api.deepseek.com',
   });
 
   const messages = [
+    { role: 'system', content: buildSystemPrompt() },
     {
       role: 'user',
       content: `请对以下 GitHub PR 进行代码审查：
@@ -132,84 +142,98 @@ PR 编号：#${pullNumber}
   while (iteration < MAX_ITERATIONS) {
     iteration++;
 
-    // 调用 Claude，流式获取思考文字
-    const stream = await client.messages.stream({
-      model: 'claude-sonnet-4-20250514',
+    const stream = await client.chat.completions.create({
+      model: 'deepseek-chat',
       max_tokens: 4096,
-      system: buildSystemPrompt(),
       tools: TOOLS,
+      tool_choice: 'auto',
       messages,
+      stream: true,
     });
 
-    let thinkingBuffer = '';
+    // 流式累积响应
+    let fullContent = '';
+    const toolCallsMap = {}; // index -> { id, name, arguments }
+    let finishReason = null;
 
     for await (const chunk of stream) {
-      if (
-        chunk.type === 'content_block_delta' &&
-        chunk.delta.type === 'text_delta' &&
-        chunk.delta.text
-      ) {
-        thinkingBuffer += chunk.delta.text;
-        yield { type: 'thinking', text: chunk.delta.text };
+      const choice = chunk.choices?.[0];
+      if (!choice) continue;
+
+      const delta = choice.delta;
+
+      // 累积思考文字并实时推送
+      if (delta?.content) {
+        fullContent += delta.content;
+        yield { type: 'thinking', text: delta.content };
+      }
+
+      // 累积工具调用 delta
+      if (delta?.tool_calls) {
+        for (const tc of delta.tool_calls) {
+          if (!toolCallsMap[tc.index]) {
+            toolCallsMap[tc.index] = { id: '', name: '', arguments: '' };
+          }
+          if (tc.id) toolCallsMap[tc.index].id = tc.id;
+          if (tc.function?.name) toolCallsMap[tc.index].name += tc.function.name;
+          if (tc.function?.arguments) toolCallsMap[tc.index].arguments += tc.function.arguments;
+        }
+      }
+
+      if (choice.finish_reason) {
+        finishReason = choice.finish_reason;
       }
     }
 
-    const finalMessage = await stream.finalMessage();
-
-    // 终止条件：Claude 不再调用工具
-    if (finalMessage.stop_reason === 'end_turn') {
-      // 提取最终报告
-      const reportContent = finalMessage.content
-        .filter((b) => b.type === 'text')
-        .map((b) => b.text)
-        .join('');
-      yield { type: 'report', content: reportContent };
+    // 终止：无工具调用，输出最终报告
+    if (finishReason === 'stop' || Object.keys(toolCallsMap).length === 0) {
+      yield { type: 'report', content: fullContent || '分析完成，但未生成报告。' };
       break;
     }
 
-    // 处理工具调用
-    const toolUseBlocks = finalMessage.content.filter((b) => b.type === 'tool_use');
-
-    if (toolUseBlocks.length === 0) {
-      // 没有工具调用也没有 end_turn，异常情况
-      const text = finalMessage.content
-        .filter((b) => b.type === 'text')
-        .map((b) => b.text)
-        .join('');
-      yield { type: 'report', content: text || '分析完成，但未生成报告。' };
-      break;
-    }
-
-    // 将 Claude 回复加入消息历史
-    messages.push({ role: 'assistant', content: finalMessage.content });
+    // 将 assistant 消息（含工具调用）加入历史
+    const toolCallsList = Object.values(toolCallsMap);
+    messages.push({
+      role: 'assistant',
+      content: fullContent || null,
+      tool_calls: toolCallsList.map((tc) => ({
+        id: tc.id,
+        type: 'function',
+        function: { name: tc.name, arguments: tc.arguments },
+      })),
+    });
 
     // 执行每个工具调用
-    const toolResults = [];
-    for (const toolUse of toolUseBlocks) {
+    for (const tc of toolCallsList) {
+      let input;
+      try {
+        input = JSON.parse(tc.arguments);
+      } catch {
+        input = {};
+      }
+
       const startTime = Date.now();
-      yield { type: 'tool_start', name: toolUse.name, input: toolUse.input };
+      yield { type: 'tool_start', name: tc.name, input };
 
       let result;
       let isError = false;
       try {
-        result = await executeTool(toolUse.name, toolUse.input);
+        result = await executeTool(tc.name, input);
       } catch (err) {
         result = { error: err.message };
         isError = true;
       }
 
       const durationMs = Date.now() - startTime;
-      yield { type: 'tool_done', name: toolUse.name, durationMs, isError };
+      yield { type: 'tool_done', name: tc.name, durationMs, isError };
 
-      toolResults.push({
-        type: 'tool_result',
-        tool_use_id: toolUse.id,
+      // 将工具结果注入消息历史（OpenAI 格式）
+      messages.push({
+        role: 'tool',
+        tool_call_id: tc.id,
         content: JSON.stringify(result),
       });
     }
-
-    // 将工具结果注入消息历史
-    messages.push({ role: 'user', content: toolResults });
   }
 
   if (iteration >= MAX_ITERATIONS) {
@@ -228,7 +252,6 @@ function sendSSE(res, data) {
 // Vercel Serverless Function 导出
 // ──────────────────────────────────────────
 export default async function handler(req, res) {
-  // 设置 SSE 响应头
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');
   res.setHeader('Connection', 'keep-alive');
@@ -258,7 +281,6 @@ export default async function handler(req, res) {
   try {
     for await (const event of runAgent(owner, repo, pullNumber)) {
       sendSSE(res, event);
-      // 刷新缓冲区（Express/Node.js 需要）
       if (res.flush) res.flush();
     }
   } catch (err) {
@@ -269,5 +291,4 @@ export default async function handler(req, res) {
   res.end();
 }
 
-// 同时导出 runAgent 供本地脚本测试
 export { runAgent };
