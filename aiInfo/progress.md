@@ -1,7 +1,7 @@
 # PR Pilot — 开发进度记录
 
-**最后更新：** 2026-04-02（阶段五收尾）  
-**当前阶段：** 全部阶段完成，待 Vercel 部署上线
+**最后更新：** 2026-04-02（学习中心功能上线）  
+**当前阶段：** 全部阶段完成 + 学习中心已上线
 
 ---
 
@@ -14,6 +14,7 @@
 | 阶段三：流式推送 | Day 6-7 | SSE 接入前端，思考链实时展示 | ✅ 完成 |
 | 阶段四：报告与 UI | Day 8-11 | 结构化报告 + 前端 UI 打磨 | ✅ 完成 |
 | 阶段五：上线收尾 | Day 12-14 | 部署 + 错误处理 + README + Demo | ✅ 完成 |
+| 学习中心 | 2026-04-02 | 10 个章节 + 学习页面 | ✅ 完成 |
 
 ---
 
@@ -23,8 +24,10 @@
 ai-pr-reviewer/
 ├── src/
 │   ├── pages/
-│   │   ├── Home.jsx              ✅ 首页（输入框 + 历史列表）
-│   │   └── Review.jsx            ✅ 分析页（双栏：思考链 + 报告）
+│   │   ├── Home.jsx              ✅ 首页（输入框 + 历史列表 + 学习中心入口）
+│   │   ├── Review.jsx            ✅ 分析页（双栏：思考链 + 报告）
+│   │   ├── Learn.jsx             ✅ 学习中心（章节卡片网格）
+│   │   └── Chapter.jsx           ✅ 章节内容页（Markdown 渲染 + 上下章导航）
 │   ├── components/
 │   │   ├── PRInput.jsx           ✅ PR 链接输入框（格式校验 + loading）
 │   │   ├── ThinkingTimeline.jsx  ✅ 思考链时间轴
@@ -36,19 +39,42 @@ ai-pr-reviewer/
 │   │   ├── useAgentStream.js     ✅ SSE 消费 Hook（useReducer 状态管理）
 │   │   └── useHistory.js         ✅ sessionStorage 历史读写
 │   ├── lib/
-│   │   └── parsePRUrl.js         ✅ PR 链接解析（前端用）
-│   ├── App.jsx                   ✅ React Router 路由配置
+│   │   ├── parsePRUrl.js         ✅ PR 链接解析（前端用）
+│   │   └── chapters.js           ✅ 学习章节数据（import ?raw + 元数据）
+│   ├── App.jsx                   ✅ React Router 路由配置（含 /learn 路由）
 │   └── index.css                 ✅ 深色主题 + Tailwind v4
 ├── api/
 │   ├── review.js                 ✅ Agent ReAct 循环 + SSE 端点（DeepSeek 版）
 │   ├── github.js                 ✅ GitHub API 工具函数
 │   └── parsePRUrl.js             ✅ PR 链接解析（服务端）
+├── doc/
+│   ├── 01-project-overview.md    ✅ 项目全景
+│   ├── 02-environment-setup.md   ✅ 开发环境搭建
+│   ├── 03-frontend-routing.md    ✅ 前端路由与页面结构
+│   ├── 04-component-design.md    ✅ 组件拆分设计
+│   ├── 05-react-agent-core.md    ✅ AI Agent 核心：ReAct 推理循环
+│   ├── 06-tool-use.md            ✅ Tool Use / Function Calling
+│   ├── 07-sse-streaming.md       ✅ SSE 流式推送
+│   ├── 08-github-api.md          ✅ GitHub API 集成
+│   ├── 09-state-management.md    ✅ 前端状态管理：Hooks 设计
+│   └── 10-deployment.md          ✅ 生产部署：Vercel Serverless
 ├── local/
 │   └── server.js                 ✅ Express 本地服务器（端口 3001）
 ├── .env.local                    ✅ 已配置所有密钥
 ├── vercel.json                   ✅ Vercel 路由配置
 └── vite.config.js                ✅ Tailwind + /api 代理到 localhost:3001
 ```
+
+---
+
+## 学习中心功能（2026-04-02）
+
+- [x] `doc/` 文件夹：10 个中文 Markdown 学习章节
+- [x] `src/lib/chapters.js`：用 Vite `?raw` 导入章节内容 + 元数据
+- [x] `src/pages/Learn.jsx`：章节卡片网格（`/learn`）
+- [x] `src/pages/Chapter.jsx`：章节内容页，含上/下章导航（`/learn/:chapterId`）
+- [x] `src/App.jsx`：新增 `/learn` 和 `/learn/:chapterId` 路由
+- [x] `src/pages/Home.jsx`：Header 加「学习中心 →」入口链接
 
 ---
 
@@ -103,6 +129,7 @@ ai-pr-reviewer/
 - [x] Vercel 部署成功（2026-04-02）
 - **生产地址：** https://ai-pr-reviewer-iota.vercel.app/
 - [x] 生产环境运行正常
+- [x] 学习中心功能上线（2026-04-02）— `/learn` 路由，10 个中文学习章节
 
 ---
 

@@ -1,4 +1,4 @@
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { parsePRUrl } from '../lib/parsePRUrl.js';
 import { PRInput } from '../components/PRInput.jsx';
 import { HistoryList } from '../components/HistoryList.jsx';
@@ -20,6 +20,14 @@ export default function Home() {
         <div className="max-w-5xl mx-auto flex items-center gap-3">
           <span className="text-lg font-bold text-zinc-100 font-mono">PR Pilot</span>
           <span className="text-xs text-zinc-500 font-mono">AI Code Reviewer</span>
+          <div className="ml-auto">
+            <Link
+              to="/learn"
+              className="text-xs text-zinc-400 hover:text-indigo-300 font-mono transition-colors"
+            >
+              学习中心 →
+            </Link>
+          </div>
         </div>
       </header>
 
